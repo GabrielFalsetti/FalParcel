@@ -29,53 +29,53 @@ public class InstallmentPlan
         ? null
         : Installments.Max(i => i.DueDate);
 
-    public int PaidCount => Installments.Count(i => i.IsPaid);
-    public int RemainingCount => Installments.Count(i => !i.IsPaid);
-    public decimal RemainingAmount => Installments.Where(i => !i.IsPaid).Sum(i => i.Amount);
-    public decimal PaidAmount => Installments.Where(i => i.IsPaid).Sum(i => i.Amount);
-    public bool IsPaidOff => Installments.Count > 0 && Installments.All(i => i.IsPaid);
+    public int PaidCount(PaymentMode mode) =>
+        Installments.Count(i => i.IsEffectivelyPaid(mode));
 
-    public Installment? NextDue => Installments
-        .Where(i => !i.IsPaid)
+    public int RemainingCount(PaymentMode mode) =>
+        Installments.Count(i => !i.IsEffectivelyPaid(mode));
+
+    public decimal RemainingAmount(PaymentMode mode) =>
+        Installments.Where(i => !i.IsEffectivelyPaid(mode)).Sum(i => i.Amount);
+
+    public decimal PaidAmount(PaymentMode mode) =>
+        Installments.Where(i => i.IsEffectivelyPaid(mode)).Sum(i => i.Amount);
+
+    public bool IsPaidOff(PaymentMode mode) =>
+        Installments.Count > 0 && Installments.All(i => i.IsEffectivelyPaid(mode));
+
+    public Installment? NextDue(PaymentMode mode) => Installments
+        .Where(i => !i.IsEffectivelyPaid(mode))
         .OrderBy(i => i.DueDate)
         .FirstOrDefault();
 
-    public string StatusLabel
+    public string StatusLabel(PaymentMode mode)
     {
-        get
-        {
-            if (IsPaidOff) return "Finalizado";
-            var next = NextDue;
-            return next is null ? "—" : $"Até {next.DueDate:dd/MM/yyyy}";
-        }
+        if (IsPaidOff(mode)) return "Finalizado";
+        var next = NextDue(mode);
+        return next is null ? "—" : $"Até {PaymentRules.FormatMonth(next.DueDate)}";
     }
 
     public static List<Installment> GenerateInstallments(
         decimal installmentAmount,
         int totalInstallments,
         DateOnly startDate,
-        int dueDay,
-        bool markPastAsPaid = true)
+        int dueDay = 1)
     {
         var list = new List<Installment>(totalInstallments);
         var year = startDate.Year;
         var month = startDate.Month;
-        var today = DateOnly.FromDateTime(DateTime.Today);
-        var firstOfCurrentMonth = new DateOnly(today.Year, today.Month, 1);
 
         for (var n = 1; n <= totalInstallments; n++)
         {
-            var day = Math.Min(Math.Max(dueDay, 1), DateTime.DaysInMonth(year, month));
-            var due = new DateOnly(year, month, day);
-            var paid = markPastAsPaid && due < firstOfCurrentMonth;
-
+            // Sempre dia 1 — o controle é só por mês.
             list.Add(new Installment
             {
                 Number = n,
                 Amount = installmentAmount,
-                DueDate = due,
-                IsPaid = paid,
-                PaidDate = paid ? due : null
+                DueDate = new DateOnly(year, month, 1),
+                IsPaid = false,
+                PaidDate = null
             });
 
             month++;

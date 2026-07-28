@@ -40,13 +40,27 @@ public class InstallmentStore(LocalStorageService storage)
         EnsureCardsFromPlans();
     }
 
+    public async Task<PaymentMode> GetPaymentModeAsync()
+    {
+        await EnsureLoadedAsync();
+        return _cache!.Settings.PaymentMode;
+    }
+
+    public async Task SavePaymentModeAsync(PaymentMode mode)
+    {
+        await EnsureLoadedAsync();
+        _cache!.Settings.PaymentMode = mode;
+        await PersistAsync();
+    }
+
     public async Task<IReadOnlyList<InstallmentPlan>> GetPlansAsync()
     {
         await EnsureLoadedAsync();
-        return _cache!.Plans
-            .OrderBy(p => p.IsPaidOff)
+        var mode = _cache!.Settings.PaymentMode;
+        return _cache.Plans
+            .OrderBy(p => p.IsPaidOff(mode))
             .ThenBy(p => p.Card)
-            .ThenBy(p => p.NextDue?.DueDate ?? DateOnly.MaxValue)
+            .ThenBy(p => p.NextDue(mode)?.DueDate ?? DateOnly.MaxValue)
             .ToList();
     }
 
@@ -136,9 +150,11 @@ public class InstallmentStore(LocalStorageService storage)
     public async Task ToggleInstallmentAsync(string planId, string installmentId, bool paid)
     {
         await EnsureLoadedAsync();
-        var plan = _cache!.Plans.FirstOrDefault(p => p.Id == planId);
+        var mode = _cache!.Settings.PaymentMode;
+        var plan = _cache.Plans.FirstOrDefault(p => p.Id == planId);
         var item = plan?.Installments.FirstOrDefault(i => i.Id == installmentId);
         if (plan is null || item is null) return;
+        if (PaymentRules.IsLockedByDate(item, mode)) return;
 
         item.IsPaid = paid;
         item.PaidDate = paid ? DateOnly.FromDateTime(DateTime.Today) : null;
@@ -170,7 +186,8 @@ public class InstallmentStore(LocalStorageService storage)
     public async Task DownloadDataExcelAsync()
     {
         var plans = await GetPlansAsync();
-        var bytes = ExcelWorkbookService.ExportPlans(plans);
+        var mode = await GetPaymentModeAsync();
+        var bytes = ExcelWorkbookService.ExportPlans(plans, mode);
         await storage.DownloadBytesAsync($"falparcel-{DateTime.Now:yyyyMMdd-HHmm}.xlsx", bytes,
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
@@ -192,11 +209,11 @@ public class InstallmentStore(LocalStorageService storage)
         }
     }
 
-    public DashboardSummary GetSummary(IEnumerable<InstallmentPlan> plans, int? year = null)
+    public DashboardSummary GetSummary(IEnumerable<InstallmentPlan> plans, PaymentMode mode, int? year = null)
     {
         var list = plans.ToList();
-        var open = list.SelectMany(p => p.Installments.Where(i => !i.IsPaid)).ToList();
-        var today = DateOnly.FromDateTime(DateTime.Today);
+        var open = list.SelectMany(p => p.Installments.Where(i => !i.IsEffectivelyPaid(mode))).ToList();
+        var today = PaymentRules.Today;
         var y = year ?? today.Year;
 
         var monthTotals = Enumerable.Range(1, 12)
@@ -208,15 +225,15 @@ public class InstallmentStore(LocalStorageService storage)
                     .Where(i => i.DueDate.Year == y && i.DueDate.Month == m)
                     .Sum(i => i.Amount),
                 OpenAmount = list.SelectMany(p => p.Installments)
-                    .Where(i => !i.IsPaid && i.DueDate.Year == y && i.DueDate.Month == m)
+                    .Where(i => !i.IsEffectivelyPaid(mode) && i.DueDate.Year == y && i.DueDate.Month == m)
                     .Sum(i => i.Amount)
             })
             .ToList();
 
         return new DashboardSummary
         {
-            ActivePlans = list.Count(p => !p.IsPaidOff),
-            PaidOffPlans = list.Count(p => p.IsPaidOff),
+            ActivePlans = list.Count(p => !p.IsPaidOff(mode)),
+            PaidOffPlans = list.Count(p => p.IsPaidOff(mode)),
             RemainingDebt = open.Sum(i => i.Amount),
             DueThisMonth = open.Where(i => i.DueDate.Year == today.Year && i.DueDate.Month == today.Month).Sum(i => i.Amount),
             OpenInstallmentCount = open.Count,
@@ -227,25 +244,26 @@ public class InstallmentStore(LocalStorageService storage)
                 .Select(g => new CardSummary
                 {
                     Card = g.Key,
-                    ActivePlans = g.Count(p => !p.IsPaidOff),
-                    RemainingAmount = g.Sum(p => p.RemainingAmount),
+                    ActivePlans = g.Count(p => !p.IsPaidOff(mode)),
+                    RemainingAmount = g.Sum(p => p.RemainingAmount(mode)),
                     DueThisMonth = g.SelectMany(p => p.Installments)
-                        .Where(i => !i.IsPaid && i.DueDate.Year == today.Year && i.DueDate.Month == today.Month)
+                        .Where(i => !i.IsEffectivelyPaid(mode) && i.DueDate.Year == today.Year && i.DueDate.Month == today.Month)
                         .Sum(i => i.Amount)
                 })
                 .OrderByDescending(c => c.RemainingAmount)
                 .ToList(),
             Upcoming = list
-                .Where(p => !p.IsPaidOff && p.NextDue is not null)
-                .Select(p => new UpcomingItem
+                .Select(p => new { Plan = p, Next = p.NextDue(mode) })
+                .Where(x => !x.Plan.IsPaidOff(mode) && x.Next is not null)
+                .Select(x => new UpcomingItem
                 {
-                    PlanId = p.Id,
-                    PlanName = p.Name,
-                    Card = p.Card,
-                    InstallmentNumber = p.NextDue!.Number,
-                    TotalInstallments = p.TotalInstallments,
-                    Amount = p.NextDue.Amount,
-                    DueDate = p.NextDue.DueDate
+                    PlanId = x.Plan.Id,
+                    PlanName = x.Plan.Name,
+                    Card = x.Plan.Card,
+                    InstallmentNumber = x.Next!.Number,
+                    TotalInstallments = x.Plan.TotalInstallments,
+                    Amount = x.Next.Amount,
+                    DueDate = x.Next.DueDate
                 })
                 .OrderBy(u => u.DueDate)
                 .Take(10)

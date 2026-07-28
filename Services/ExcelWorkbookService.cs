@@ -37,14 +37,14 @@ public static class ExcelWorkbookService
         return BuildXlsx(rows);
     }
 
-    public static byte[] ExportPlans(IEnumerable<InstallmentPlan> plans)
+    public static byte[] ExportPlans(IEnumerable<InstallmentPlan> plans, PaymentMode mode = PaymentMode.Mixed)
     {
         var rows = new List<string[]> { Headers };
         foreach (var plan in plans.OrderBy(p => p.Card).ThenBy(p => p.StartDate))
         {
-            var finished = plan.IsPaidOff
+            var finished = plan.IsPaidOff(mode)
                 ? "Finalizado"
-                : $"Ate {(plan.EndDate ?? plan.StartDate):dd/MM/yyyy}";
+                : $"Ate {PaymentRules.FormatMonth(plan.EndDate ?? plan.StartDate)}";
 
             rows.Add(
             [
@@ -130,7 +130,7 @@ public static class ExcelWorkbookService
             if (qty <= 0 || parcel <= 0) continue;
             if (total <= 0) total = Math.Round(parcel * qty, 2);
 
-            var installments = InstallmentPlan.GenerateInstallments(parcel, qty, startDate, 1, markPastAsPaid: !finished);
+            var installments = InstallmentPlan.GenerateInstallments(parcel, qty, startDate, 1);
             if (finished)
             {
                 foreach (var inst in installments)

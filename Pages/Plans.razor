@@ -51,16 +51,16 @@ else
                             <div class="plan-main">
                                 <strong>@plan.Name</strong>
                                 <span class="muted">
-                                    @plan.PaidCount/@plan.TotalInstallments · @plan.InstallmentAmount.ToString("C")
+                                    @plan.PaidCount(_mode)/@plan.TotalInstallments · @plan.InstallmentAmount.ToString("C")
                                 </span>
                                 <div class="progress">
                                     <div class="progress-bar" style="width:@Progress(plan)%"></div>
                                 </div>
                             </div>
                             <div class="list-end">
-                                <strong>@plan.RemainingAmount.ToString("C")</strong>
-                                <span class="@(plan.IsPaidOff ? "badge badge-ok" : "badge")">
-                                    @plan.StatusLabel
+                                <strong>@plan.RemainingAmount(_mode).ToString("C")</strong>
+                                <span class="@(plan.IsPaidOff(_mode) ? "badge badge-ok" : "badge")">
+                                    @plan.StatusLabel(_mode)
                                 </span>
                             </div>
                         </a>
@@ -77,6 +77,7 @@ else
     private bool _loading = true;
     private Filter _filter = Filter.Active;
     private string? _cardFilter;
+    private PaymentMode _mode = PaymentMode.Mixed;
     private List<InstallmentPlan> _plans = [];
     private List<InstallmentPlan> _visible = [];
     private List<string> _cards = [];
@@ -89,6 +90,7 @@ else
 
     private async Task ReloadAsync()
     {
+        _mode = await Store.GetPaymentModeAsync();
         _plans = (await Store.GetPlansAsync()).ToList();
         _cards = _plans.Select(p => p.Card.Trim()).Where(c => c.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(c => c).ToList();
         ApplyFilter();
@@ -112,8 +114,8 @@ else
         IEnumerable<InstallmentPlan> q = _plans;
         q = _filter switch
         {
-            Filter.Active => q.Where(p => !p.IsPaidOff),
-            Filter.Paid => q.Where(p => p.IsPaidOff),
+            Filter.Active => q.Where(p => !p.IsPaidOff(_mode)),
+            Filter.Paid => q.Where(p => p.IsPaidOff(_mode)),
             _ => q
         };
         if (_cardFilter is not null)
@@ -121,8 +123,8 @@ else
         _visible = q.ToList();
     }
 
-    private static double Progress(InstallmentPlan plan) =>
-        plan.TotalInstallments == 0 ? 0 : (double)plan.PaidCount / plan.TotalInstallments * 100;
+    private double Progress(InstallmentPlan plan) =>
+        plan.TotalInstallments == 0 ? 0 : (double)plan.PaidCount(_mode) / plan.TotalInstallments * 100;
 
     private async void OnChanged()
     {

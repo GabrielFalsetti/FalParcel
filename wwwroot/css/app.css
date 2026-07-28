@@ -82,10 +82,51 @@ code {
 }
 
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
   font-family: var(--display);
   font-weight: 700;
-  font-size: 1.15rem;
-  color: var(--accent-strong);
+  font-size: 1.05rem;
+  color: var(--ink);
+  text-decoration: none !important;
+}
+
+.brand-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  object-fit: cover;
+  box-shadow: 0 2px 8px rgba(30, 79, 214, 0.25);
+  flex-shrink: 0;
+}
+
+.brand-text {
+  background: linear-gradient(90deg, #1e4fd6, #14b8a6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.boot-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background:
+    radial-gradient(800px 400px at 20% 0%, #dbeafe 0%, transparent 55%),
+    var(--bg);
+}
+
+.boot-logo {
+  width: 96px;
+  height: 96px;
+  border-radius: 22px;
+  object-fit: cover;
+  box-shadow: 0 12px 32px rgba(30, 79, 214, 0.28);
+  animation: rise 0.45s ease both;
 }
 
 .top-bar-meta {
@@ -552,6 +593,38 @@ code {
 .card-add-row { align-items: end; }
 .card-add-row .field { flex: 1; }
 select.input { appearance: auto; }
+input.input::placeholder,
+textarea.input::placeholder { color: #9aaba3; }
+
+.mode-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.mode-option {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.mode-option input { margin-top: 0.2rem; accent-color: var(--accent); }
+.mode-option span { display: flex; flex-direction: column; gap: 0.15rem; }
+.mode-option small { color: var(--muted); font-size: 0.85rem; line-height: 1.35; }
+.mode-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.mode-hint { margin: 0.65rem 0 0; font-size: 0.82rem; }
+.check-label.is-locked { opacity: 0.85; }
+.check-label.is-locked input { cursor: not-allowed; }
 
 @media (max-width: 420px) {
   .field-row { grid-template-columns: 1fr; }

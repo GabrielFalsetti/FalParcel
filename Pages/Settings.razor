@@ -7,13 +7,49 @@
 <p class="muted">Dados ficam neste aparelho. Cadastre os cartões e use o Excel para backup/carga.</p>
 
 <section class="section panel">
+    <h2>Pagamento das parcelas</h2>
+    <p class="muted">Define quando uma parcela conta como paga nos totais e no progresso.</p>
+
+    <div class="mode-list">
+        <label class="mode-option @(_paymentMode == PaymentMode.Manual ? "mode-active" : "")">
+            <input type="radio" name="paymentMode" checked="@(_paymentMode == PaymentMode.Manual)"
+                   @onchange="() => SetModeAsync(PaymentMode.Manual)" />
+            <span>
+                <strong>Manual</strong>
+                <small>Você marca cada parcela como paga.</small>
+            </span>
+        </label>
+        <label class="mode-option @(_paymentMode == PaymentMode.Automatic ? "mode-active" : "")">
+            <input type="radio" name="paymentMode" checked="@(_paymentMode == PaymentMode.Automatic)"
+                   @onchange="() => SetModeAsync(PaymentMode.Automatic)" />
+            <span>
+                <strong>Automático</strong>
+                <small>No mês da parcela ela já conta como paga.</small>
+            </span>
+        </label>
+        <label class="mode-option @(_paymentMode == PaymentMode.Mixed ? "mode-active" : "")">
+            <input type="radio" name="paymentMode" checked="@(_paymentMode == PaymentMode.Mixed)"
+                   @onchange="() => SetModeAsync(PaymentMode.Mixed)" />
+            <span>
+                <strong>Misto</strong>
+                <small>Pode marcar antes; se o mês chegar, também conta como paga.</small>
+            </span>
+        </label>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(_modeMessage))
+    {
+        <p class="ok">@_modeMessage</p>
+    }
+</section>
+
+<section class="section panel">
     <h2>Cartões</h2>
     <p class="muted">Cadastre apenas o nome. Eles aparecem no dropdown ao criar uma compra.</p>
 
     <div class="field-row card-add-row">
         <div class="field">
             <label for="newCard">Novo cartão</label>
-            <InputText id="newCard" @bind-Value="_newCard" class="input" placeholder="Ex: C6" @onkeydown="OnCardKey" />
+            <InputText id="newCard" @bind-Value="_newCard" class="input" placeholder="Nome do cartão" @onkeydown="OnCardKey" />
         </div>
         <button class="btn btn-primary" style="align-self:end" @onclick="AddCardAsync" disabled="@_busy">Adicionar</button>
     </div>
@@ -80,15 +116,30 @@
     private string _newCard = "";
     private string? _editingCard;
     private string _editName = "";
+    private PaymentMode _paymentMode = PaymentMode.Mixed;
     private bool _busy;
     private bool _cardsOk;
     private bool _excelOk;
     private string? _cardsMessage;
     private string? _excelMessage;
+    private string? _modeMessage;
 
-    protected override async Task OnInitializedAsync() => await ReloadCardsAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        _paymentMode = await Store.GetPaymentModeAsync();
+        await ReloadCardsAsync();
+    }
 
     private async Task ReloadCardsAsync() => _cards = (await Store.GetCardsAsync()).ToList();
+
+    private async Task SetModeAsync(PaymentMode mode)
+    {
+        _busy = true;
+        _paymentMode = mode;
+        await Store.SavePaymentModeAsync(mode);
+        _modeMessage = "Modo de pagamento salvo.";
+        _busy = false;
+    }
 
     private async Task OnCardKey(KeyboardEventArgs e)
     {

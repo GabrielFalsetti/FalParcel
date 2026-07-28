@@ -112,7 +112,7 @@ else
                             </div>
                             <div class="list-end">
                                 <strong>@item.Amount.ToString("C")</strong>
-                                <span class="badge">@item.DueDate.ToString("dd/MM")</span>
+                                <span class="badge">@PaymentRules.FormatMonth(item.DueDate)</span>
                             </div>
                         </a>
                     </li>
@@ -134,17 +134,20 @@ else
         await ReloadAsync();
     }
 
+    private PaymentMode _mode = PaymentMode.Mixed;
+
     private async Task ReloadAsync()
     {
+        _mode = await Store.GetPaymentModeAsync();
         _plans = (await Store.GetPlansAsync()).ToList();
-        _summary = Store.GetSummary(_plans, _year);
+        _summary = Store.GetSummary(_plans, _mode, _year);
         _loading = false;
     }
 
     private async Task ChangeYear(int delta)
     {
         _year += delta;
-        _summary = Store.GetSummary(_plans, _year);
+        _summary = Store.GetSummary(_plans, _mode, _year);
         await Task.CompletedTask;
     }
 

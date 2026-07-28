@@ -23,12 +23,12 @@ else
         <h1>@_plan.Name</h1>
         <p class="muted">
             @_plan.StartDate.ToString("MMM/yyyy") → @(_plan.EndDate?.ToString("MMM/yyyy") ?? "—")
-            · @_plan.StatusLabel
+            · @_plan.StatusLabel(_mode)
         </p>
         <div class="detail-amounts">
             <div>
                 <span class="stat-label">Restante</span>
-                <strong>@_plan.RemainingAmount.ToString("C")</strong>
+                <strong>@_plan.RemainingAmount(_mode).ToString("C")</strong>
             </div>
             <div>
                 <span class="stat-label">Parcela</span>
@@ -36,12 +36,13 @@ else
             </div>
             <div>
                 <span class="stat-label">Progresso</span>
-                <strong>@_plan.PaidCount/@_plan.TotalInstallments</strong>
+                <strong>@_plan.PaidCount(_mode)/@_plan.TotalInstallments</strong>
             </div>
         </div>
         <div class="progress progress-lg">
             <div class="progress-bar" style="width:@Progress()%"></div>
         </div>
+        <p class="muted mode-hint">@PaymentRules.Describe(_mode)</p>
         <div class="action-row">
             <a class="btn btn-ghost" href="@($"plans/{Id}/edit")">Editar</a>
             <button class="btn btn-danger" @onclick="ConfirmDelete">Excluir</button>
@@ -58,13 +59,23 @@ else
         <ul class="list installment-list">
             @foreach (var item in _plan.Installments.OrderBy(i => i.Number))
             {
-                <li class="installment-row @(item.IsPaid ? "is-paid" : "")">
-                    <label class="check-label">
-                        <input type="checkbox" checked="@item.IsPaid"
+                var effective = item.IsEffectivelyPaid(_mode);
+                var locked = PaymentRules.IsLockedByDate(item, _mode);
+                <li class="installment-row @(effective ? "is-paid" : "")">
+                    <label class="check-label @(locked ? "is-locked" : "")">
+                        <input type="checkbox"
+                               checked="@effective"
+                               disabled="@locked"
                                @onchange="e => ToggleAsync(item, (bool)(e.Value ?? false))" />
                         <span>
                             <strong>@item.Number/@_plan.TotalInstallments</strong>
-                            <span class="muted">@item.DueDate.ToString("MMM/yyyy")</span>
+                            <span class="muted">
+                                @PaymentRules.FormatMonth(item.DueDate)
+                                @if (locked && effective)
+                                {
+                                    <text> · auto</text>
+                                }
+                            </span>
                         </span>
                     </label>
                     <strong>@item.Amount.ToString("C")</strong>
@@ -93,6 +104,7 @@ else
 
     private bool _loading = true;
     private bool _confirmDelete;
+    private PaymentMode _mode = PaymentMode.Mixed;
     private InstallmentPlan? _plan;
 
     protected override async Task OnParametersSetAsync()
@@ -104,6 +116,7 @@ else
         }
 
         _loading = true;
+        _mode = await Store.GetPaymentModeAsync();
         _plan = await Store.GetPlanAsync(Id);
         _loading = false;
     }
@@ -111,7 +124,7 @@ else
     private double Progress() =>
         _plan is null || _plan.TotalInstallments == 0
             ? 0
-            : (double)_plan.PaidCount / _plan.TotalInstallments * 100;
+            : (double)_plan.PaidCount(_mode) / _plan.TotalInstallments * 100;
 
     private async Task ToggleAsync(Installment item, bool paid)
     {

@@ -9,12 +9,14 @@ public class Installment
     public bool IsPaid { get; set; }
     public DateOnly? PaidDate { get; set; }
 
-    public bool IsDueThisMonth
+    public bool IsEffectivelyPaid(PaymentMode mode, DateOnly? asOf = null) =>
+        PaymentRules.IsEffectivelyPaid(this, mode, asOf);
+
+    public bool IsDueThisMonth(PaymentMode mode, DateOnly? asOf = null)
     {
-        get
-        {
-            var today = DateOnly.FromDateTime(DateTime.Today);
-            return !IsPaid && DueDate.Year == today.Year && DueDate.Month == today.Month;
-        }
+        var today = asOf ?? PaymentRules.Today;
+        return !IsEffectivelyPaid(mode, today)
+               && DueDate.Year == today.Year
+               && DueDate.Month == today.Month;
     }
 }

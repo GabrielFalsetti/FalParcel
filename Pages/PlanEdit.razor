@@ -22,54 +22,49 @@ else if (_cards.Count == 0)
 else
 {
     <EditForm Model="_model" OnValidSubmit="SaveAsync" class="form">
-        <div class="field-row">
-            <div class="field">
-                <label for="card">Cartão</label>
-                <InputSelect id="card" @bind-Value="_model.Card" class="input">
-                    <option value="">Selecione...</option>
-                    @foreach (var card in _cards)
-                    {
-                        <option value="@card">@card</option>
-                    }
-                </InputSelect>
-            </div>
-            <div class="field">
-                <label for="dueDay">Dia vencimento</label>
-                <InputNumber id="dueDay" @bind-Value="_model.DueDay" class="input" />
-            </div>
+        <div class="field">
+            <label for="card">Cartão</label>
+            <InputSelect id="card" @bind-Value="_model.Card" class="input">
+                <option value="">Selecione o cartão</option>
+                @foreach (var card in _cards)
+                {
+                    <option value="@card">@card</option>
+                }
+            </InputSelect>
         </div>
 
         <div class="field">
             <label for="name">Compra</label>
-            <InputText id="name" @bind-Value="_model.Name" class="input" placeholder="Ex: Bateria do Carro" />
+            <InputText id="name" @bind-Value="_model.Name" class="input" placeholder="Nome da compra" />
         </div>
 
         <div class="field-row">
             <div class="field">
                 <label for="total">Valor total</label>
-                <InputNumber id="total" @bind-Value="_model.TotalAmount" class="input" />
+                <InputNumber id="total" @bind-Value="_model.TotalAmount" class="input" placeholder="0,00" />
             </div>
             <div class="field">
                 <label for="installments">Qtd parcelas</label>
-                <InputNumber id="installments" @bind-Value="_model.TotalInstallments" class="input" />
+                <InputNumber id="installments" @bind-Value="_model.TotalInstallments" class="input" placeholder="0" />
             </div>
         </div>
 
         <div class="field-row">
             <div class="field">
                 <label for="amount">Valor da parcela</label>
-                <InputNumber id="amount" @bind-Value="_model.InstallmentAmount" class="input" />
+                <InputNumber id="amount" @bind-Value="_model.InstallmentAmount" class="input" placeholder="0,00" />
                 <button type="button" class="link-btn" @onclick="CalcFromTotal">Calcular pelo total</button>
             </div>
             <div class="field">
                 <label for="start">Mês início</label>
-                <InputDate id="start" @bind-Value="_startDate" class="input" />
+                <input id="start" type="month" class="input" value="@_startMonth"
+                       @onchange="OnStartMonthChanged" />
             </div>
         </div>
 
         <div class="field">
             <label for="notes">Observações</label>
-            <InputTextArea id="notes" @bind-Value="_model.Notes" class="input textarea" rows="3" />
+            <InputTextArea id="notes" @bind-Value="_model.Notes" class="input textarea" rows="3" placeholder="Opcional" />
         </div>
 
         @if (!string.IsNullOrWhiteSpace(_error))
@@ -99,7 +94,7 @@ else
     private bool _isEdit;
     private bool _regenerate = true;
     private string? _error;
-    private DateTime _startDate = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private string _startMonth = $"{DateTime.Today:yyyy-MM}";
     private InstallmentPlan _model = new();
     private List<string> _cards = [];
 
@@ -140,7 +135,7 @@ else
                 }).ToList(),
                 CreatedAt = existing.CreatedAt
             };
-            _startDate = new DateTime(existing.StartDate.Year, existing.StartDate.Month, 1);
+            _startMonth = $"{existing.StartDate:yyyy-MM}";
             _regenerate = false;
 
             if (!string.IsNullOrWhiteSpace(_model.Card)
@@ -160,11 +155,16 @@ else
                 InstallmentAmount = 0,
                 TotalAmount = 0
             };
-            _startDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+            _startMonth = $"{DateTime.Today:yyyy-MM}";
             _regenerate = true;
         }
 
         _loading = false;
+    }
+
+    private void OnStartMonthChanged(ChangeEventArgs e)
+    {
+        _startMonth = e.Value?.ToString() ?? _startMonth;
     }
 
     private void CalcFromTotal()
@@ -204,15 +204,16 @@ else
             return;
         }
 
-        if (_model.DueDay is < 1 or > 31)
-        {
-            _error = "Dia de vencimento inválido.";
-            return;
-        }
-
         _saving = true;
 
-        _model.StartDate = new DateOnly(_startDate.Year, _startDate.Month, 1);
+        _model.DueDay = 1;
+        if (!DateOnly.TryParse($"{_startMonth}-01", out var startMonth))
+        {
+            _error = "Informe o mês de início.";
+            _saving = false;
+            return;
+        }
+        _model.StartDate = startMonth;
         if (_model.TotalAmount <= 0)
             _model.TotalAmount = Math.Round(_model.InstallmentAmount * _model.TotalInstallments, 2);
 
@@ -225,9 +226,7 @@ else
             var generated = InstallmentPlan.GenerateInstallments(
                 _model.InstallmentAmount,
                 _model.TotalInstallments,
-                _model.StartDate,
-                _model.DueDay,
-                markPastAsPaid: !_isEdit);
+                _model.StartDate);
 
             foreach (var item in generated)
             {
