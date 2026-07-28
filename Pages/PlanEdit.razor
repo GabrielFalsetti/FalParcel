@@ -1,0 +1,249 @@
+@page "/plans/new"
+@page "/plans/{Id}/edit"
+@inject InstallmentStore Store
+@inject NavigationManager Nav
+
+<PageTitle>@(_isEdit ? "Editar" : "Nova") compra — FalParcel</PageTitle>
+
+<a class="back-link" href="@(_isEdit ? $"plans/{Id}" : "plans")">← Voltar</a>
+<h1>@(_isEdit ? "Editar" : "Nova") compra</h1>
+
+@if (_loading)
+{
+    <p class="muted">Carregando...</p>
+}
+else if (_cards.Count == 0)
+{
+    <div class="empty-state">
+        <p>Cadastre pelo menos um cartão em Configurações antes de adicionar compras.</p>
+        <a class="btn btn-primary" href="settings">Ir para Configurações</a>
+    </div>
+}
+else
+{
+    <EditForm Model="_model" OnValidSubmit="SaveAsync" class="form">
+        <div class="field-row">
+            <div class="field">
+                <label for="card">Cartão</label>
+                <InputSelect id="card" @bind-Value="_model.Card" class="input">
+                    <option value="">Selecione...</option>
+                    @foreach (var card in _cards)
+                    {
+                        <option value="@card">@card</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="field">
+                <label for="dueDay">Dia vencimento</label>
+                <InputNumber id="dueDay" @bind-Value="_model.DueDay" class="input" />
+            </div>
+        </div>
+
+        <div class="field">
+            <label for="name">Compra</label>
+            <InputText id="name" @bind-Value="_model.Name" class="input" placeholder="Ex: Bateria do Carro" />
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="total">Valor total</label>
+                <InputNumber id="total" @bind-Value="_model.TotalAmount" class="input" />
+            </div>
+            <div class="field">
+                <label for="installments">Qtd parcelas</label>
+                <InputNumber id="installments" @bind-Value="_model.TotalInstallments" class="input" />
+            </div>
+        </div>
+
+        <div class="field-row">
+            <div class="field">
+                <label for="amount">Valor da parcela</label>
+                <InputNumber id="amount" @bind-Value="_model.InstallmentAmount" class="input" />
+                <button type="button" class="link-btn" @onclick="CalcFromTotal">Calcular pelo total</button>
+            </div>
+            <div class="field">
+                <label for="start">Mês início</label>
+                <InputDate id="start" @bind-Value="_startDate" class="input" />
+            </div>
+        </div>
+
+        <div class="field">
+            <label for="notes">Observações</label>
+            <InputTextArea id="notes" @bind-Value="_model.Notes" class="input textarea" rows="3" />
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <p class="error">@_error</p>
+        }
+
+        @if (_isEdit)
+        {
+            <label class="check-inline">
+                <InputCheckbox @bind-Value="_regenerate" />
+                Regenerar parcelas (mantém as já pagas se possível)
+            </label>
+        }
+
+        <button type="submit" class="btn btn-primary btn-block" disabled="@_saving">
+            @(_saving ? "Salvando..." : "Salvar")
+        </button>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public string? Id { get; set; }
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _isEdit;
+    private bool _regenerate = true;
+    private string? _error;
+    private DateTime _startDate = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private InstallmentPlan _model = new();
+    private List<string> _cards = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _isEdit = !string.IsNullOrWhiteSpace(Id) && !Id.Equals("new", StringComparison.OrdinalIgnoreCase);
+        _cards = (await Store.GetCardsAsync()).ToList();
+
+        if (_isEdit)
+        {
+            var existing = await Store.GetPlanAsync(Id!);
+            if (existing is null)
+            {
+                Nav.NavigateTo("plans");
+                return;
+            }
+
+            _model = new InstallmentPlan
+            {
+                Id = existing.Id,
+                Card = existing.Card,
+                Name = existing.Name,
+                TotalAmount = existing.TotalAmount,
+                InstallmentAmount = existing.InstallmentAmount,
+                TotalInstallments = existing.TotalInstallments,
+                StartDate = existing.StartDate,
+                DueDay = existing.DueDay,
+                Notes = existing.Notes,
+                Installments = existing.Installments.Select(i => new Installment
+                {
+                    Id = i.Id,
+                    Number = i.Number,
+                    Amount = i.Amount,
+                    DueDate = i.DueDate,
+                    IsPaid = i.IsPaid,
+                    PaidDate = i.PaidDate
+                }).ToList(),
+                CreatedAt = existing.CreatedAt
+            };
+            _startDate = new DateTime(existing.StartDate.Year, existing.StartDate.Month, 1);
+            _regenerate = false;
+
+            if (!string.IsNullOrWhiteSpace(_model.Card)
+                && !_cards.Any(c => c.Equals(_model.Card, StringComparison.OrdinalIgnoreCase)))
+            {
+                _cards.Add(_model.Card);
+                _cards = _cards.OrderBy(c => c).ToList();
+            }
+        }
+        else
+        {
+            _model = new InstallmentPlan
+            {
+                Card = _cards.FirstOrDefault() ?? "",
+                TotalInstallments = 10,
+                DueDay = 1,
+                InstallmentAmount = 0,
+                TotalAmount = 0
+            };
+            _startDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+            _regenerate = true;
+        }
+
+        _loading = false;
+    }
+
+    private void CalcFromTotal()
+    {
+        if (_model.TotalInstallments <= 0) return;
+        _model.InstallmentAmount = Math.Round(_model.TotalAmount / _model.TotalInstallments, 2);
+    }
+
+    private async Task SaveAsync()
+    {
+        _error = null;
+
+        if (string.IsNullOrWhiteSpace(_model.Card))
+        {
+            _error = "Selecione o cartão.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_model.Name))
+        {
+            _error = "Informe a compra.";
+            return;
+        }
+
+        if (_model.TotalInstallments <= 0)
+        {
+            _error = "Informe a quantidade de parcelas.";
+            return;
+        }
+
+        if (_model.InstallmentAmount <= 0 && _model.TotalAmount > 0)
+            CalcFromTotal();
+
+        if (_model.InstallmentAmount <= 0)
+        {
+            _error = "Informe o valor da parcela.";
+            return;
+        }
+
+        if (_model.DueDay is < 1 or > 31)
+        {
+            _error = "Dia de vencimento inválido.";
+            return;
+        }
+
+        _saving = true;
+
+        _model.StartDate = new DateOnly(_startDate.Year, _startDate.Month, 1);
+        if (_model.TotalAmount <= 0)
+            _model.TotalAmount = Math.Round(_model.InstallmentAmount * _model.TotalInstallments, 2);
+
+        if (!_isEdit || _regenerate)
+        {
+            var paidMap = _model.Installments
+                .Where(i => i.IsPaid)
+                .ToDictionary(i => i.Number, i => i);
+
+            var generated = InstallmentPlan.GenerateInstallments(
+                _model.InstallmentAmount,
+                _model.TotalInstallments,
+                _model.StartDate,
+                _model.DueDay,
+                markPastAsPaid: !_isEdit);
+
+            foreach (var item in generated)
+            {
+                if (paidMap.TryGetValue(item.Number, out var paid))
+                {
+                    item.IsPaid = true;
+                    item.PaidDate = paid.PaidDate;
+                    item.Id = paid.Id;
+                }
+            }
+
+            _model.Installments = generated;
+        }
+
+        await Store.SavePlanAsync(_model);
+        _saving = false;
+        Nav.NavigateTo($"plans/{_model.Id}");
+    }
+}

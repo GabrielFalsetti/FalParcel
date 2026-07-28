@@ -1,0 +1,31 @@
+﻿@inherits LayoutComponentBase
+
+<div class="app-shell">
+    <header class="top-bar">
+        <div class="brand">FalParcel</div>
+        <div class="top-bar-meta">@DateTime.Now.ToString("MMM yyyy")</div>
+    </header>
+
+    <main class="page-content">
+        @Body
+    </main>
+
+    <nav class="bottom-nav" aria-label="Navegação principal">
+        <NavLink class="nav-item" href="" Match="NavLinkMatch.All">
+            <span class="nav-icon" aria-hidden="true">⌂</span>
+            <span>Início</span>
+        </NavLink>
+        <NavLink class="nav-item" href="plans">
+            <span class="nav-icon" aria-hidden="true">☰</span>
+            <span>Compras</span>
+        </NavLink>
+        <NavLink class="nav-item nav-item-primary" href="plans/new">
+            <span class="nav-icon" aria-hidden="true">＋</span>
+            <span>Novo</span>
+        </NavLink>
+        <NavLink class="nav-item" href="settings">
+            <span class="nav-icon" aria-hidden="true">⚙</span>
+            <span>Ajustes</span>
+        </NavLink>
+    </nav>
+</div>

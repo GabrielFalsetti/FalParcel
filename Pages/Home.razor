@@ -1,0 +1,161 @@
+﻿@page "/"
+@inject InstallmentStore Store
+@implements IDisposable
+
+<PageTitle>FalParcel — Início</PageTitle>
+
+@if (_loading)
+{
+    <p class="muted">Carregando...</p>
+}
+else
+{
+    <section class="hero-summary">
+        <p class="eyebrow">A pagar em @DateTime.Now.ToString("MMMM")</p>
+        <h1 class="money">@_summary.DueThisMonth.ToString("C")</h1>
+        <p class="hero-sub">@_summary.ActivePlans ativos · @_summary.RemainingDebt.ToString("C") em aberto</p>
+    </section>
+
+    <section class="stat-row">
+        <div class="stat">
+            <span class="stat-label">Em aberto</span>
+            <strong>@_summary.RemainingDebt.ToString("C")</strong>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Parcelas abertas</span>
+            <strong>@_summary.OpenInstallmentCount</strong>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Finalizados</span>
+            <strong>@_summary.PaidOffPlans</strong>
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="section-head">
+            <h2>Por cartão</h2>
+        </div>
+        @if (_summary.ByCard.Count == 0)
+        {
+            <div class="empty-state">
+                <p>Nenhuma compra ainda.</p>
+                <a class="btn btn-primary" href="plans/new">Nova compra</a>
+            </div>
+        }
+        else
+        {
+            <ul class="list">
+                @foreach (var card in _summary.ByCard)
+                {
+                    <li class="list-row static-row">
+                        <div>
+                            <strong>@card.Card</strong>
+                            <span class="muted">@card.ActivePlans ativo(s)</span>
+                        </div>
+                        <div class="list-end">
+                            <strong>@card.DueThisMonth.ToString("C")</strong>
+                            <span class="muted">este mês</span>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    <section class="section">
+        <div class="section-head">
+            <h2>Totais @_summary.Year</h2>
+            <div class="year-nav">
+                <button type="button" class="chip" @onclick="() => ChangeYear(-1)">←</button>
+                <button type="button" class="chip" @onclick="() => ChangeYear(1)">→</button>
+            </div>
+        </div>
+        <div class="month-grid">
+            @foreach (var m in _summary.MonthTotals)
+            {
+                var isCurrent = m.Year == DateTime.Today.Year && m.Month == DateTime.Today.Month;
+                <div class="month-cell @(isCurrent ? "month-current" : "") @(m.Amount == 0 ? "month-empty" : "")">
+                    <span class="month-label">@m.Label</span>
+                    <strong>@(m.Amount == 0 ? "—" : m.Amount.ToString("C"))</strong>
+                    @if (m.OpenAmount > 0 && m.OpenAmount != m.Amount)
+                    {
+                        <span class="muted">@m.OpenAmount.ToString("C") aberto</span>
+                    }
+                </div>
+            }
+        </div>
+    </section>
+
+    <section class="section">
+        <div class="section-head">
+            <h2>Próximos</h2>
+            <a href="plans">Ver todos</a>
+        </div>
+
+        @if (_summary.Upcoming.Count == 0)
+        {
+            <div class="empty-state">
+                <p>Nada em aberto.</p>
+                <a class="btn btn-primary" href="plans/new">Nova compra</a>
+            </div>
+        }
+        else
+        {
+            <ul class="list">
+                @foreach (var item in _summary.Upcoming)
+                {
+                    <li>
+                        <a class="list-row" href="@($"plans/{item.PlanId}")">
+                            <div>
+                                <strong>@item.PlanName</strong>
+                                <span class="muted">@item.Card · @item.InstallmentNumber/@item.TotalInstallments</span>
+                            </div>
+                            <div class="list-end">
+                                <strong>@item.Amount.ToString("C")</strong>
+                                <span class="badge">@item.DueDate.ToString("dd/MM")</span>
+                            </div>
+                        </a>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+}
+
+@code {
+    private bool _loading = true;
+    private int _year = DateTime.Today.Year;
+    private DashboardSummary _summary = new();
+    private List<InstallmentPlan> _plans = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        Store.Changed += OnChanged;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _plans = (await Store.GetPlansAsync()).ToList();
+        _summary = Store.GetSummary(_plans, _year);
+        _loading = false;
+    }
+
+    private async Task ChangeYear(int delta)
+    {
+        _year += delta;
+        _summary = Store.GetSummary(_plans, _year);
+        await Task.CompletedTask;
+    }
+
+    private async void OnChanged()
+    {
+        await InvokeAsync(async () =>
+        {
+            await ReloadAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose() => Store.Changed -= OnChanged;
+}

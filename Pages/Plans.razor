@@ -1,0 +1,137 @@
+@page "/plans"
+@inject InstallmentStore Store
+@implements IDisposable
+
+<PageTitle>FalParcel — Compras</PageTitle>
+
+<section class="section-head page-head">
+    <h1>Compras</h1>
+    <a class="btn btn-primary btn-sm" href="plans/new">Nova</a>
+</section>
+
+<div class="filter-row">
+    <button class="chip @(_filter == Filter.Active ? "chip-active" : "")" @onclick="() => SetFilter(Filter.Active)">Ativos</button>
+    <button class="chip @(_filter == Filter.All ? "chip-active" : "")" @onclick="() => SetFilter(Filter.All)">Todos</button>
+    <button class="chip @(_filter == Filter.Paid ? "chip-active" : "")" @onclick="() => SetFilter(Filter.Paid)">Finalizados</button>
+</div>
+
+@if (_cards.Count > 1)
+{
+    <div class="filter-row">
+        <button class="chip @(_cardFilter is null ? "chip-active" : "")" @onclick="() => SetCard(null)">Todos cartões</button>
+        @foreach (var card in _cards)
+        {
+            <button class="chip @(_cardFilter == card ? "chip-active" : "")" @onclick="() => SetCard(card)">@card</button>
+        }
+    </div>
+}
+
+@if (_loading)
+{
+    <p class="muted">Carregando...</p>
+}
+else if (_visible.Count == 0)
+{
+    <div class="empty-state">
+        <p>Nada por aqui ainda.</p>
+        <a class="btn btn-primary" href="plans/new">Adicionar compra</a>
+    </div>
+}
+else
+{
+    @foreach (var group in _visible.GroupBy(p => string.IsNullOrWhiteSpace(p.Card) ? "Sem cartão" : p.Card))
+    {
+        <section class="section">
+            <h2 class="card-group-title">@group.Key</h2>
+            <ul class="list">
+                @foreach (var plan in group)
+                {
+                    <li>
+                        <a class="list-row plan-row" href="@($"plans/{plan.Id}")">
+                            <div class="plan-main">
+                                <strong>@plan.Name</strong>
+                                <span class="muted">
+                                    @plan.PaidCount/@plan.TotalInstallments · @plan.InstallmentAmount.ToString("C")
+                                </span>
+                                <div class="progress">
+                                    <div class="progress-bar" style="width:@Progress(plan)%"></div>
+                                </div>
+                            </div>
+                            <div class="list-end">
+                                <strong>@plan.RemainingAmount.ToString("C")</strong>
+                                <span class="@(plan.IsPaidOff ? "badge badge-ok" : "badge")">
+                                    @plan.StatusLabel
+                                </span>
+                            </div>
+                        </a>
+                    </li>
+                }
+            </ul>
+        </section>
+    }
+}
+
+@code {
+    private enum Filter { Active, All, Paid }
+
+    private bool _loading = true;
+    private Filter _filter = Filter.Active;
+    private string? _cardFilter;
+    private List<InstallmentPlan> _plans = [];
+    private List<InstallmentPlan> _visible = [];
+    private List<string> _cards = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        Store.Changed += OnChanged;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _plans = (await Store.GetPlansAsync()).ToList();
+        _cards = _plans.Select(p => p.Card.Trim()).Where(c => c.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(c => c).ToList();
+        ApplyFilter();
+        _loading = false;
+    }
+
+    private void SetFilter(Filter filter)
+    {
+        _filter = filter;
+        ApplyFilter();
+    }
+
+    private void SetCard(string? card)
+    {
+        _cardFilter = card;
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        IEnumerable<InstallmentPlan> q = _plans;
+        q = _filter switch
+        {
+            Filter.Active => q.Where(p => !p.IsPaidOff),
+            Filter.Paid => q.Where(p => p.IsPaidOff),
+            _ => q
+        };
+        if (_cardFilter is not null)
+            q = q.Where(p => p.Card.Equals(_cardFilter, StringComparison.OrdinalIgnoreCase));
+        _visible = q.ToList();
+    }
+
+    private static double Progress(InstallmentPlan plan) =>
+        plan.TotalInstallments == 0 ? 0 : (double)plan.PaidCount / plan.TotalInstallments * 100;
+
+    private async void OnChanged()
+    {
+        await InvokeAsync(async () =>
+        {
+            await ReloadAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose() => Store.Changed -= OnChanged;
+}

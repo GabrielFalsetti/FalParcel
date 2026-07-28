@@ -1,0 +1,211 @@
+@page "/settings"
+@inject InstallmentStore Store
+
+<PageTitle>Configurações — FalParcel</PageTitle>
+
+<h1>Configurações</h1>
+<p class="muted">Dados ficam neste aparelho. Cadastre os cartões e use o Excel para backup/carga.</p>
+
+<section class="section panel">
+    <h2>Cartões</h2>
+    <p class="muted">Cadastre apenas o nome. Eles aparecem no dropdown ao criar uma compra.</p>
+
+    <div class="field-row card-add-row">
+        <div class="field">
+            <label for="newCard">Novo cartão</label>
+            <InputText id="newCard" @bind-Value="_newCard" class="input" placeholder="Ex: C6" @onkeydown="OnCardKey" />
+        </div>
+        <button class="btn btn-primary" style="align-self:end" @onclick="AddCardAsync" disabled="@_busy">Adicionar</button>
+    </div>
+
+    @if (_cards.Count == 0)
+    {
+        <p class="muted">Nenhum cartão cadastrado ainda.</p>
+    }
+    else
+    {
+        <ul class="list">
+            @foreach (var card in _cards)
+            {
+                <li class="list-row static-row">
+                    @if (_editingCard == card)
+                    {
+                        <InputText @bind-Value="_editName" class="input" />
+                        <div class="action-row">
+                            <button class="btn btn-sm btn-primary" @onclick="SaveRenameAsync">Salvar</button>
+                            <button class="btn btn-sm btn-ghost" @onclick="CancelEdit">Cancelar</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <strong>@card</strong>
+                        <div class="action-row">
+                            <button class="btn btn-sm btn-ghost" @onclick="() => StartEdit(card)">Editar</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteCardAsync(card)">Excluir</button>
+                        </div>
+                    }
+                </li>
+            }
+        </ul>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_cardsMessage))
+    {
+        <p class="@(_cardsOk ? "ok" : "error")">@_cardsMessage</p>
+    }
+</section>
+
+<section class="section panel">
+    <h2>Excel</h2>
+    <p class="muted">
+        Baixe o modelo vazio, preencha as linhas e importe. As compras preenchidas serão <strong>inseridas</strong> no sistema.
+        Colunas: Cartão, Compra, Qtd Parcelas, Valor Parcela, Valor Total, Mês Início, Mês Final, Finalizou.
+    </p>
+    <div class="action-row wrap">
+        <button class="btn btn-primary" @onclick="DownloadTemplateAsync" disabled="@_busy">Baixar modelo vazio</button>
+        <button class="btn btn-ghost" @onclick="DownloadDataAsync" disabled="@_busy">Exportar dados</button>
+        <label class="btn file-btn">
+            Importar Excel
+            <InputFile OnChange="ImportExcelAsync" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+        </label>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(_excelMessage))
+    {
+        <p class="@(_excelOk ? "ok" : "error")">@_excelMessage</p>
+    }
+</section>
+
+@code {
+    private List<string> _cards = [];
+    private string _newCard = "";
+    private string? _editingCard;
+    private string _editName = "";
+    private bool _busy;
+    private bool _cardsOk;
+    private bool _excelOk;
+    private string? _cardsMessage;
+    private string? _excelMessage;
+
+    protected override async Task OnInitializedAsync() => await ReloadCardsAsync();
+
+    private async Task ReloadCardsAsync() => _cards = (await Store.GetCardsAsync()).ToList();
+
+    private async Task OnCardKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await AddCardAsync();
+    }
+
+    private async Task AddCardAsync()
+    {
+        _busy = true;
+        _cardsMessage = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_newCard))
+            {
+                _cardsOk = false;
+                _cardsMessage = "Informe o nome do cartão.";
+                return;
+            }
+
+            await Store.AddCardAsync(_newCard);
+            _newCard = "";
+            await ReloadCardsAsync();
+            _cardsOk = true;
+            _cardsMessage = "Cartão adicionado.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void StartEdit(string card)
+    {
+        _editingCard = card;
+        _editName = card;
+        _cardsMessage = null;
+    }
+
+    private void CancelEdit()
+    {
+        _editingCard = null;
+        _editName = "";
+    }
+
+    private async Task SaveRenameAsync()
+    {
+        if (_editingCard is null) return;
+        _busy = true;
+        try
+        {
+            await Store.RenameCardAsync(_editingCard, _editName);
+            _editingCard = null;
+            await ReloadCardsAsync();
+            _cardsOk = true;
+            _cardsMessage = "Cartão atualizado.";
+        }
+        catch (Exception ex)
+        {
+            _cardsOk = false;
+            _cardsMessage = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteCardAsync(string card)
+    {
+        _busy = true;
+        await Store.DeleteCardAsync(card);
+        await ReloadCardsAsync();
+        _cardsOk = true;
+        _cardsMessage = "Cartão removido.";
+        _busy = false;
+    }
+
+    private async Task DownloadTemplateAsync()
+    {
+        _busy = true;
+        await Store.DownloadEmptyExcelAsync();
+        _excelOk = true;
+        _excelMessage = "Modelo baixado.";
+        _busy = false;
+    }
+
+    private async Task DownloadDataAsync()
+    {
+        _busy = true;
+        await Store.DownloadDataExcelAsync();
+        _excelOk = true;
+        _excelMessage = "Dados exportados.";
+        _busy = false;
+    }
+
+    private async Task ImportExcelAsync(InputFileChangeEventArgs e)
+    {
+        _busy = true;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            var (ok, message) = await Store.ImportExcelAsync(ms.ToArray());
+            _excelOk = ok;
+            _excelMessage = message;
+            await ReloadCardsAsync();
+        }
+        catch (Exception ex)
+        {
+            _excelOk = false;
+            _excelMessage = $"Erro ao importar: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

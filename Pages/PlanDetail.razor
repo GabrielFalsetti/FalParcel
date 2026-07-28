@@ -1,0 +1,129 @@
+@page "/plans/{Id}"
+@inject InstallmentStore Store
+@inject NavigationManager Nav
+
+<PageTitle>@(_plan?.Name ?? "Compra") — FalParcel</PageTitle>
+
+@if (_loading)
+{
+    <p class="muted">Carregando...</p>
+}
+else if (_plan is null)
+{
+    <div class="empty-state">
+        <p>Compra não encontrada.</p>
+        <a class="btn" href="plans">Voltar</a>
+    </div>
+}
+else
+{
+    <section class="detail-hero">
+        <a class="back-link" href="plans">← Voltar</a>
+        <p class="eyebrow">@_plan.Card</p>
+        <h1>@_plan.Name</h1>
+        <p class="muted">
+            @_plan.StartDate.ToString("MMM/yyyy") → @(_plan.EndDate?.ToString("MMM/yyyy") ?? "—")
+            · @_plan.StatusLabel
+        </p>
+        <div class="detail-amounts">
+            <div>
+                <span class="stat-label">Restante</span>
+                <strong>@_plan.RemainingAmount.ToString("C")</strong>
+            </div>
+            <div>
+                <span class="stat-label">Parcela</span>
+                <strong>@_plan.InstallmentAmount.ToString("C")</strong>
+            </div>
+            <div>
+                <span class="stat-label">Progresso</span>
+                <strong>@_plan.PaidCount/@_plan.TotalInstallments</strong>
+            </div>
+        </div>
+        <div class="progress progress-lg">
+            <div class="progress-bar" style="width:@Progress()%"></div>
+        </div>
+        <div class="action-row">
+            <a class="btn btn-ghost" href="@($"plans/{Id}/edit")">Editar</a>
+            <button class="btn btn-danger" @onclick="ConfirmDelete">Excluir</button>
+        </div>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(_plan.Notes))
+    {
+        <p class="notes">@_plan.Notes</p>
+    }
+
+    <section class="section">
+        <h2>Parcelas</h2>
+        <ul class="list installment-list">
+            @foreach (var item in _plan.Installments.OrderBy(i => i.Number))
+            {
+                <li class="installment-row @(item.IsPaid ? "is-paid" : "")">
+                    <label class="check-label">
+                        <input type="checkbox" checked="@item.IsPaid"
+                               @onchange="e => ToggleAsync(item, (bool)(e.Value ?? false))" />
+                        <span>
+                            <strong>@item.Number/@_plan.TotalInstallments</strong>
+                            <span class="muted">@item.DueDate.ToString("MMM/yyyy")</span>
+                        </span>
+                    </label>
+                    <strong>@item.Amount.ToString("C")</strong>
+                </li>
+            }
+        </ul>
+    </section>
+}
+
+@if (_confirmDelete)
+{
+    <div class="modal-backdrop" @onclick="() => _confirmDelete = false">
+        <div class="modal" @onclick:stopPropagation="true">
+            <h3>Excluir compra?</h3>
+            <p>Essa ação não pode ser desfeita.</p>
+            <div class="action-row">
+                <button class="btn btn-ghost" @onclick="() => _confirmDelete = false">Cancelar</button>
+                <button class="btn btn-danger" @onclick="DeleteAsync">Excluir</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Id { get; set; } = string.Empty;
+
+    private bool _loading = true;
+    private bool _confirmDelete;
+    private InstallmentPlan? _plan;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (string.Equals(Id, "new", StringComparison.OrdinalIgnoreCase))
+        {
+            Nav.NavigateTo("plans/new", replace: true);
+            return;
+        }
+
+        _loading = true;
+        _plan = await Store.GetPlanAsync(Id);
+        _loading = false;
+    }
+
+    private double Progress() =>
+        _plan is null || _plan.TotalInstallments == 0
+            ? 0
+            : (double)_plan.PaidCount / _plan.TotalInstallments * 100;
+
+    private async Task ToggleAsync(Installment item, bool paid)
+    {
+        await Store.ToggleInstallmentAsync(Id, item.Id, paid);
+        _plan = await Store.GetPlanAsync(Id);
+    }
+
+    private void ConfirmDelete() => _confirmDelete = true;
+
+    private async Task DeleteAsync()
+    {
+        await Store.DeletePlanAsync(Id);
+        Nav.NavigateTo("plans");
+    }
+}
