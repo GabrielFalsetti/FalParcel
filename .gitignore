@@ -51,6 +51,9 @@ Desktop.ini
 .vscode/*
 !.vscode/extensions.json
 
-# Publish
+# Publish / Cloudflare build
 publish/
+output/
+dotnet/
+dotnet-install.sh
 *.publish.xml

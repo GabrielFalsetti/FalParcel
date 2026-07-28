@@ -28,3 +28,17 @@ dotnet run
 ```
 
 No Chrome/Edge do celular: **Instalar app** / **Adicionar à tela inicial**.
+
+## Publicar no Cloudflare Pages (Git)
+
+No painel do projeto Pages:
+
+| Campo | Valor |
+|--------|--------|
+| **Build command** | `chmod +x build.sh && ./build.sh` |
+| **Build output directory** | `output/wwwroot` |
+| Framework preset | None |
+
+Não use `dotnet run` — o Cloudflare não tem .NET instalado; o `build.sh` instala o SDK 9 e faz o `publish`.
+
+Depois do push, o deploy sobe sozinho.
