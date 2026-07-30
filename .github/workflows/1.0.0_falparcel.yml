@@ -1,0 +1,70 @@
+# LEGADO — Azure App Service (pode gerar custo se o plano não for Free F1).
+# Preferir o workflow azure-static-web-apps.yml (plano Free do Static Web Apps).
+# Este arquivo fica desativado (sem triggers) para não publicar em App Service por engano.
+#
+# Docs App Service: https://github.com/Azure/webapps-deploy
+
+name: Build and deploy ASP.Net Core app to Azure Web App - FalParcel (disabled)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Digite deploy-appservice para confirmar (legado; prefira Static Web Apps)'
+        required: true
+
+jobs:
+  build:
+    if: github.event.inputs.confirm == 'deploy-appservice'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.x'
+
+      - name: Build with dotnet
+        run: dotnet build --configuration Release
+
+      - name: dotnet publish
+        run: dotnet publish -c Release -o "${{env.DOTNET_ROOT}}/myapp"
+
+      - name: Upload artifact for deployment job
+        uses: actions/upload-artifact@v4
+        with:
+          name: .net-app
+          path: ${{env.DOTNET_ROOT}}/myapp
+
+  deploy:
+    if: github.event.inputs.confirm == 'deploy-appservice'
+    runs-on: windows-latest
+    needs: build
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Download artifact from build job
+        uses: actions/download-artifact@v4
+        with:
+          name: .net-app
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_065680BC23884584A5B3FA1D1B1C28A3 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_3A5FC0F72BAC43BFB97A13E0C06F4DE8 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_87FFB7E54DB84D569AD0CE37FB7EFE87 }}
+
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'FalParcel'
+          slot-name: 'Production'
+          package: .
