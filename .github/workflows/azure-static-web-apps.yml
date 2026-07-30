@@ -1,5 +1,8 @@
 # Deploy FalParcel (Blazor WASM PWA) para Azure Static Web Apps — plano Free
 # Docs: https://learn.microsoft.com/azure/static-web-apps/
+#
+# Sem AZURE_STATIC_WEB_APPS_API_TOKEN o build ainda valida o publish e o deploy é
+# ignorado (skip_deploy_on_missing_secrets), para o CI do PR não falhar.
 
 name: Deploy Azure Static Web Apps
 
@@ -40,7 +43,7 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
           skip_app_build: true
-          skip_api_build: true
+          skip_deploy_on_missing_secrets: true
           app_location: artifacts/wwwroot
           api_location: ''
           output_location: ''
@@ -55,3 +58,4 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           action: close
+          skip_deploy_on_missing_secrets: true
