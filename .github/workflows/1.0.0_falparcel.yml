@@ -1,19 +1,24 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
+# LEGADO — Azure App Service (pode gerar custo se o plano não for Free F1).
+# Preferir o workflow azure-static-web-apps.yml (plano Free do Static Web Apps).
+# Este arquivo fica desativado (sem triggers) para não publicar em App Service por engano.
+#
+# Docs App Service: https://github.com/Azure/webapps-deploy
 
-name: Build and deploy ASP.Net Core app to Azure Web App - FalParcel
+name: Build and deploy ASP.Net Core app to Azure Web App - FalParcel (disabled)
 
 on:
-  push:
-    branches:
-      - 1.0.0
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Digite deploy-appservice para confirmar (legado; prefira Static Web Apps)'
+        required: true
 
 jobs:
   build:
+    if: github.event.inputs.confirm == 'deploy-appservice'
     runs-on: windows-latest
     permissions:
-      contents: read #This is required for actions/checkout
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -36,18 +41,19 @@ jobs:
           path: ${{env.DOTNET_ROOT}}/myapp
 
   deploy:
+    if: github.event.inputs.confirm == 'deploy-appservice'
     runs-on: windows-latest
     needs: build
     permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
+      id-token: write
+      contents: read
 
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
           name: .net-app
-      
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -62,4 +68,3 @@ jobs:
           app-name: 'FalParcel'
           slot-name: 'Production'
           package: .
-          
