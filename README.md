@@ -46,7 +46,7 @@ O app é **Blazor WebAssembly** (só arquivos estáticos). Use **Azure Static We
 
 ### 2. Deploy automático
 
-O workflow [`.github/workflows/azure-static-web-apps.yml`](.github/workflows/azure-static-web-apps.yml) publica a cada push na branch `1.0.0` (ou via **Actions** → **Deploy Azure Static Web Apps** → **Run workflow**).
+O workflow [`.github/workflows/azure-static-web-apps.yml`](.github/workflows/azure-static-web-apps.yml) publica a cada push na branch `1.0.0` (ou via **Actions** → **Deploy Azure Static Web Apps** → **Run workflow**). Sem o secret, o CI só valida o `dotnet publish` e ignora o deploy Azure (não falha o check).
 
 Build local equivalente:
 
