@@ -27,23 +27,24 @@ window.parcelly = {
     a.remove();
     URL.revokeObjectURL(url);
   },
-  // iOS: type=tel + inputmode=numeric abre o teclado numérico GRANDE (number pad).
-  // withPattern=true (inteiros). Em dinheiro formatado com vírgula, use false.
+  // iOS: type=tel abre o teclado telefônico GRANDE (0-9).
+  // Evite inputmode=numeric em campos com vírgula — o Safari pode cair no teclado ABC/123.
   forceNumberPad: (selectors, withPattern = true) => {
     const list = Array.isArray(selectors) ? selectors : [selectors];
     for (const selector of list) {
       document.querySelectorAll(selector).forEach((el) => {
         const apply = () => {
-          // tel é o jeito mais confiável no Safari para o pad grande 3x4
+          if (el.type !== 'tel') el.type = 'tel';
           el.setAttribute('type', 'tel');
-          el.setAttribute('inputmode', 'numeric');
-          el.inputMode = 'numeric';
+          el.removeAttribute('inputmode');
+          try { el.inputMode = ''; } catch (_) { /* ignore */ }
           if (withPattern) el.setAttribute('pattern', '[0-9]*');
           else el.removeAttribute('pattern');
         };
         apply();
         if (el.dataset.padBound === '1') return;
         el.dataset.padBound = '1';
+        el.addEventListener('touchstart', apply, { passive: true });
         el.addEventListener('focus', apply);
       });
     }

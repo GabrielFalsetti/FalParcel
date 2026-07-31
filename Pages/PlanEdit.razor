@@ -44,16 +44,18 @@ else
         <div class="field-row">
             <div class="field">
                 <label for="total">Valor total</label>
-                <input id="total" class="input keypad-money" type="tel" inputmode="numeric"
-                       enterkeyhint="next" autocomplete="off" placeholder="0,00"
+                <input id="total" class="input keypad-money" type="tel"
+                       enterkeyhint="done" autocomplete="off" autocorrect="off" spellcheck="false"
+                       placeholder="0,00"
                        value="@FormatMoney(_model.TotalAmount)"
                        @oninput="OnTotalInput" />
                 <span class="field-hint">Teclado numérico — os 2 últimos dígitos são os centavos</span>
             </div>
             <div class="field">
                 <label for="installments">Qtd parcelas</label>
-                <input id="installments" class="input keypad-int" type="tel" inputmode="numeric" pattern="[0-9]*"
-                       enterkeyhint="next" autocomplete="off" placeholder="0"
+                <input id="installments" class="input keypad-int" type="tel" pattern="[0-9]*"
+                       enterkeyhint="done" autocomplete="off" autocorrect="off" spellcheck="false"
+                       placeholder="0"
                        value="@(_model.TotalInstallments > 0 ? _model.TotalInstallments.ToString() : "")"
                        @oninput="OnInstallmentsInput" />
             </div>
@@ -62,8 +64,9 @@ else
         <div class="field-row">
             <div class="field">
                 <label for="amount">Valor da parcela</label>
-                <input id="amount" class="input keypad-money" type="tel" inputmode="numeric"
-                       enterkeyhint="next" autocomplete="off" placeholder="0,00"
+                <input id="amount" class="input keypad-money" type="tel"
+                       enterkeyhint="done" autocomplete="off" autocorrect="off" spellcheck="false"
+                       placeholder="0,00"
                        value="@FormatMoney(_model.InstallmentAmount)"
                        @oninput="OnAmountInput" />
                 <button type="button" class="link-btn" @onclick="CalcFromTotal">Calcular pelo total</button>
