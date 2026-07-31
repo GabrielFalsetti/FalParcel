@@ -1,7 +1,10 @@
 @page "/plans/new"
 @page "/plans/{Id}/edit"
+@using System.Globalization
+@using System.Linq
 @inject InstallmentStore Store
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>@(_isEdit ? "Editar" : "Nova") compra — FalParcel</PageTitle>
 
@@ -41,18 +44,28 @@ else
         <div class="field-row">
             <div class="field">
                 <label for="total">Valor total</label>
-                <InputNumber id="total" @bind-Value="_model.TotalAmount" class="input" placeholder="0,00" />
+                <input id="total" class="input keypad-money" type="tel" inputmode="numeric"
+                       enterkeyhint="next" autocomplete="off" placeholder="0,00"
+                       value="@FormatMoney(_model.TotalAmount)"
+                       @oninput="OnTotalInput" />
+                <span class="field-hint">Teclado numérico — os 2 últimos dígitos são os centavos</span>
             </div>
             <div class="field">
                 <label for="installments">Qtd parcelas</label>
-                <InputNumber id="installments" @bind-Value="_model.TotalInstallments" class="input" placeholder="0" />
+                <input id="installments" class="input keypad-int" type="tel" inputmode="numeric" pattern="[0-9]*"
+                       enterkeyhint="next" autocomplete="off" placeholder="0"
+                       value="@(_model.TotalInstallments > 0 ? _model.TotalInstallments.ToString() : "")"
+                       @oninput="OnInstallmentsInput" />
             </div>
         </div>
 
         <div class="field-row">
             <div class="field">
                 <label for="amount">Valor da parcela</label>
-                <InputNumber id="amount" @bind-Value="_model.InstallmentAmount" class="input" placeholder="0,00" />
+                <input id="amount" class="input keypad-money" type="tel" inputmode="numeric"
+                       enterkeyhint="next" autocomplete="off" placeholder="0,00"
+                       value="@FormatMoney(_model.InstallmentAmount)"
+                       @oninput="OnAmountInput" />
                 <button type="button" class="link-btn" @onclick="CalcFromTotal">Calcular pelo total</button>
             </div>
             <div class="field">
@@ -162,10 +175,59 @@ else
         _loading = false;
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_loading || _cards.Count == 0)
+            return;
+
+        try
+        {
+            await JS.InvokeVoidAsync("parcelly.forceNumberPad", ".keypad-int", true);
+            await JS.InvokeVoidAsync("parcelly.forceNumberPad", ".keypad-money", false);
+        }
+        catch (JSException)
+        {
+            // JS ainda não carregou no primeiro frame — ignora
+        }
+    }
+
     private void OnStartMonthChanged(ChangeEventArgs e)
     {
         _startMonth = e.Value?.ToString() ?? _startMonth;
     }
+
+    private void OnTotalInput(ChangeEventArgs e) =>
+        _model.TotalAmount = DigitsToMoney(e.Value?.ToString());
+
+    private void OnAmountInput(ChangeEventArgs e) =>
+        _model.InstallmentAmount = DigitsToMoney(e.Value?.ToString());
+
+    private void OnInstallmentsInput(ChangeEventArgs e)
+    {
+        var digits = OnlyDigits(e.Value?.ToString());
+        _model.TotalInstallments = int.TryParse(digits, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n > 0
+            ? n
+            : 0;
+    }
+
+    /// <summary>Exibe centavos no estilo caixa: 1050 → 10,50.</summary>
+    private static string FormatMoney(decimal value) =>
+        value.ToString("N2", CultureInfo.GetCultureInfo("pt-BR"));
+
+    private static decimal DigitsToMoney(string? raw)
+    {
+        var digits = OnlyDigits(raw);
+        if (string.IsNullOrEmpty(digits))
+            return 0;
+
+        if (digits.Length > 11)
+            digits = digits[^11..];
+
+        return long.Parse(digits, CultureInfo.InvariantCulture) / 100m;
+    }
+
+    private static string OnlyDigits(string? raw) =>
+        raw is null ? "" : new string(raw.Where(char.IsDigit).ToArray());
 
     private void CalcFromTotal()
     {
