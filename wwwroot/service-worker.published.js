@@ -16,6 +16,20 @@ const base = "/";
 const baseUrl = new URL(base, self.origin);
 const manifestUrlList = self.assetsManifest.assets.map(asset => new URL(asset.url, baseUrl).href);
 
+// Safari / Cloudflare: respostas com redirected=true não podem ser devolvidas pelo SW
+// (erro: "Response served by service worker has redirections").
+function toUnredirectedResponse(response) {
+    if (!response || !response.redirected) {
+        return response;
+    }
+
+    return new Response(response.body, {
+        headers: response.headers,
+        status: response.status,
+        statusText: response.statusText
+    });
+}
+
 async function onInstall(event) {
     console.info('Service worker: Install');
 
@@ -24,7 +38,15 @@ async function onInstall(event) {
         .filter(asset => offlineAssetsInclude.some(pattern => pattern.test(asset.url)))
         .filter(asset => !offlineAssetsExclude.some(pattern => pattern.test(asset.url)))
         .map(asset => new Request(asset.url, { integrity: asset.hash, cache: 'no-cache' }));
-    await caches.open(cacheName).then(cache => cache.addAll(assetsRequests));
+
+    const cache = await caches.open(cacheName);
+    await Promise.all(assetsRequests.map(async request => {
+        const response = await fetch(request);
+        if (!response.ok) {
+            throw new Error(`Failed to cache ${request.url}: ${response.status}`);
+        }
+        await cache.put(request, toUnredirectedResponse(response));
+    }));
 }
 
 async function onActivate(event) {
@@ -48,8 +70,8 @@ async function onFetch(event) {
 
         const request = shouldServeIndexHtml ? 'index.html' : event.request;
         const cache = await caches.open(cacheName);
-        cachedResponse = await cache.match(request);
+        cachedResponse = toUnredirectedResponse(await cache.match(request));
     }
 
-    return cachedResponse || fetch(event.request);
+    return cachedResponse || fetch(event.request).then(toUnredirectedResponse);
 }
