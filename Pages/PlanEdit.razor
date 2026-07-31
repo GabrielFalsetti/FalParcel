@@ -1,5 +1,6 @@
 @page "/plans/new"
 @page "/plans/{Id}/edit"
+@using System.Globalization
 @inject InstallmentStore Store
 @inject NavigationManager Nav
 
@@ -41,18 +42,27 @@ else
         <div class="field-row">
             <div class="field">
                 <label for="total">Valor total</label>
-                <InputNumber id="total" @bind-Value="_model.TotalAmount" class="input" placeholder="0,00" />
+                <input id="total" class="input" type="text" inputmode="decimal" enterkeyhint="next"
+                       autocomplete="off" placeholder="0,00"
+                       value="@FormatDecimal(_model.TotalAmount)"
+                       @onchange="OnTotalChanged" />
             </div>
             <div class="field">
                 <label for="installments">Qtd parcelas</label>
-                <InputNumber id="installments" @bind-Value="_model.TotalInstallments" class="input" placeholder="0" />
+                <input id="installments" class="input" type="text" inputmode="numeric" pattern="[0-9]*"
+                       enterkeyhint="next" autocomplete="off" placeholder="0"
+                       value="@(_model.TotalInstallments > 0 ? _model.TotalInstallments.ToString() : "")"
+                       @onchange="OnInstallmentsChanged" />
             </div>
         </div>
 
         <div class="field-row">
             <div class="field">
                 <label for="amount">Valor da parcela</label>
-                <InputNumber id="amount" @bind-Value="_model.InstallmentAmount" class="input" placeholder="0,00" />
+                <input id="amount" class="input" type="text" inputmode="decimal" enterkeyhint="next"
+                       autocomplete="off" placeholder="0,00"
+                       value="@FormatDecimal(_model.InstallmentAmount)"
+                       @onchange="OnAmountChanged" />
                 <button type="button" class="link-btn" @onclick="CalcFromTotal">Calcular pelo total</button>
             </div>
             <div class="field">
@@ -165,6 +175,36 @@ else
     private void OnStartMonthChanged(ChangeEventArgs e)
     {
         _startMonth = e.Value?.ToString() ?? _startMonth;
+    }
+
+    private void OnTotalChanged(ChangeEventArgs e) =>
+        _model.TotalAmount = ParseDecimal(e.Value?.ToString());
+
+    private void OnAmountChanged(ChangeEventArgs e) =>
+        _model.InstallmentAmount = ParseDecimal(e.Value?.ToString());
+
+    private void OnInstallmentsChanged(ChangeEventArgs e)
+    {
+        var text = e.Value?.ToString()?.Trim();
+        _model.TotalInstallments = int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n > 0
+            ? n
+            : 0;
+    }
+
+    private static string FormatDecimal(decimal value) =>
+        value == 0 ? "" : value.ToString("0.##", CultureInfo.CurrentCulture);
+
+    private static decimal ParseDecimal(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return 0;
+
+        if (decimal.TryParse(text, NumberStyles.Number, CultureInfo.CurrentCulture, out var value))
+            return value;
+
+        return decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out value)
+            ? value
+            : 0;
     }
 
     private void CalcFromTotal()
