@@ -6,20 +6,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#1e4fd6" />
     <meta name="description" content="FalParcel — controle de parcelamentos no celular" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="FalParcel" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <title>FalParcel</title>
     <base href="/" />
-    <link rel="stylesheet" href="css/app.css?v=3" />
-    <link rel="icon" type="image/png" href="favicon.png?v=3" />
-    <link rel="shortcut icon" type="image/png" href="favicon.png?v=3" />
+    <link rel="stylesheet" href="css/app.css?v=6" />
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon.png" />
+    <link rel="shortcut icon" type="image/png" href="favicon.png" />
     <link href="Parcelly.styles.css" rel="stylesheet" />
-    <link href="manifest.webmanifest?v=3" rel="manifest" />
-    <link rel="apple-touch-icon" href="icon-192.png?v=3" />
+    <link href="manifest.webmanifest" rel="manifest" />
+    <!-- iOS: sem query string; também sirva apple-touch-icon.png na raiz -->
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png" />
 </head>
 
 <body>
     <div id="app">
         <div class="boot-screen">
-            <img src="Img/logo.png?v=3" alt="FalParcel" class="boot-logo" width="96" height="96" />
+            <img src="Img/logo.png?v=6" alt="FalParcel" class="boot-logo" width="96" height="96" />
             <div class="loading-progress-text"></div>
         </div>
     </div>
@@ -29,9 +36,14 @@
         <a href="." class="reload">Recarregar</a>
         <span class="dismiss">×</span>
     </div>
-    <script src="js/parcelly.js?v=5"></script>
+    <script src="js/parcelly.js?v=6"></script>
     <script src="_framework/blazor.webassembly.js"></script>
-    <script>navigator.serviceWorker.register('service-worker.js?v=3');</script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' })
+                .then(function (reg) { reg.update(); });
+        }
+    </script>
 </body>
 
 </html>
